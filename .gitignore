@@ -1,0 +1,17 @@
+# --- secrets ---
+.env
+
+# --- python ---
+__pycache__/
+*.py[cod]
+
+# --- odoo ---
+*.log
+odoo.conf
+.odoo/
+
+# --- editor / os ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
