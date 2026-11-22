@@ -4,17 +4,16 @@
     text-overflow: ellipsis;
 }
 
+// The panel stays in the normal document flow (no absolute positioning, no
+// z-index): parent containers grow with it, so ancestors with
+// `overflow-hidden` (e.g. .o_survey_section) cannot clip it.
 .o_dsr_staff_sales_panel {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 10;
+    position: static;
     margin-top: 0.25rem;
+    margin-bottom: 0.5rem;
 
     .o_dsr_staff_sales_results {
-        max-height: 16rem;
-        overflow-y: auto;
+        margin-bottom: 0;
     }
 
     .o_dsr_staff_sales_option {
