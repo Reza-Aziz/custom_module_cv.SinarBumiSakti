@@ -5,7 +5,7 @@
     'summary': 'Survey Sales Request Management with autocomplete and product lines',
     'author': 'Bizoft Enterprise',
     'license': 'LGPL-3',
-    'depends': ['survey', 'contacts', 'product'],
+    'depends': ['survey', 'sale'],
     'data': [],
     'assets': {
         'survey.survey_assets': [],
