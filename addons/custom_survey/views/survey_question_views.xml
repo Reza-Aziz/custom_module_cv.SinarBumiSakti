@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="survey_question_form_staff_sales" model="ir.ui.view">
+        <field name="name">survey.question.form.staff.sales</field>
+        <field name="model">survey.question</field>
+        <field name="inherit_id" ref="survey.survey_question_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='save_as_nickname']/parent::group" position="after">
+                <group invisible="question_type != 'char_box'">
+                    <field name="is_staff_sales_search"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

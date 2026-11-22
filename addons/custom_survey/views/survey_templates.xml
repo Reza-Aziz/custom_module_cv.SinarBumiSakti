@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="question_char_box_staff_sales"
+              inherit_id="survey.question_char_box"
+              name="Survey: Staff Sales searchable text box">
+        <xpath expr="//input" position="attributes">
+            <attribute name="t-att-data-dsr-staff-sales">'1' if question.is_staff_sales_search else None</attribute>
+            <attribute name="t-att-autocomplete">'off' if question.is_staff_sales_search else None</attribute>
+        </xpath>
+    </template>
+</odoo>

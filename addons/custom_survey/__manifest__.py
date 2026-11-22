@@ -6,9 +6,15 @@
     'author': 'Bizoft Enterprise',
     'license': 'LGPL-3',
     'depends': ['survey', 'sale'],
-    'data': [],
+    'data': [
+        'views/survey_question_views.xml',
+        'views/survey_templates.xml',
+    ],
     'assets': {
-        'survey.survey_assets': [],
+        'survey.survey_assets': [
+            'custom_survey/static/src/js/staff_selection.js',
+            'custom_survey/static/src/scss/staff_selection.scss',
+        ],
     },
     'installable': True,
     'application': False,

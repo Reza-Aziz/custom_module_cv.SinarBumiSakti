@@ -1,6 +1,9 @@
 import json
+
 from odoo import http
 from odoo.http import request
+
+STAFF_SALES_SEARCH_LIMIT = 5
 
 
 class DynamicStaffController(http.Controller):
@@ -13,32 +16,24 @@ class DynamicStaffController(http.Controller):
         csrf=False,
     )
     def search_staff(self, **kwargs):
-        query = (request.httprequest.args.get('q') or '').strip()
+        query = (request.httprequest.args.get('q') or '').strip()[:100]
 
-        # Jangan mengembalikan seluruh Staff Sales ketika query kosong.
+        # Do not return the Staff Sales directory for an empty query.
         if not query:
-            return request.make_response(
-                json.dumps({'results': []}),
-                headers=[('Content-Type', 'application/json')],
-            )
+            return self._json_response({'results': []})
 
-        # Batasi panjang input pencarian.
-        query = query[:100]
-
-        domain = [
-            ('active', '=', True),
-            ('name', '=ilike', 'STAFF SALES%'),
-            ('name', 'ilike', query),
-        ]
-
+        domain = request.env['survey.question']._get_staff_sales_domain(query)
         staff_records = request.env['res.partner'].sudo().search_read(
             domain,
             fields=['id', 'name'],
-            limit=10,
+            limit=STAFF_SALES_SEARCH_LIMIT,
             order='name asc',
         )
+        return self._json_response({'results': staff_records})
 
+    @staticmethod
+    def _json_response(payload):
         return request.make_response(
-            json.dumps({'results': staff_records}),
+            json.dumps(payload),
             headers=[('Content-Type', 'application/json')],
         )
