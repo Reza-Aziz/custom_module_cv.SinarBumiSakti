@@ -31,24 +31,6 @@ services:
       - ./addons:/mnt/extra-addons
     tty: true
 
-  mqtt-subscriber:
-    build: ./mqtt
-    restart: unless-stopped
-    depends_on:
-      - odoo
-    environment:
-      MQTT_HOST: ${MQTT_HOST:-}
-      MQTT_PORT: ${MQTT_PORT:-8883}
-      MQTT_TLS: ${MQTT_TLS:-true}
-      MQTT_USERNAME: ${MQTT_USERNAME:-}
-      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
-      MQTT_TOPIC: ${MQTT_TOPIC:-factory/plant_1/line_1/scale_weight}
-      MQTT_TARE_GRAM: ${MQTT_TARE_GRAM:-0}
-      ODOO_URL: http://odoo:8069
-      ODOO_DB: odoo
-      ODOO_USER: admin
-      ODOO_PASSWORD: admin
-
 volumes:
   db-data:
   odoo-data:
