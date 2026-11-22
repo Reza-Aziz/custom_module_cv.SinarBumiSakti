@@ -2,10 +2,10 @@
 <odoo>
     <template id="question_char_box_staff_sales"
               inherit_id="survey.question_char_box"
-              name="Survey: Staff Sales searchable text box">
+              name="Survey: searchable dropdown text box (Staff Sales / Customer)">
         <xpath expr="//input" position="attributes">
-            <attribute name="t-att-data-dsr-staff-sales">'1' if question.is_staff_sales_search else None</attribute>
-            <attribute name="t-att-autocomplete">'off' if question.is_staff_sales_search else None</attribute>
+            <attribute name="t-att-data-dsr-search-type">'staff' if question.is_staff_sales_search else ('customer' if question.is_customer_search else None)</attribute>
+            <attribute name="t-att-autocomplete">'off' if (question.is_staff_sales_search or question.is_customer_search) else None</attribute>
         </xpath>
     </template>
 </odoo>

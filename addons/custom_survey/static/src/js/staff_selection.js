@@ -2,13 +2,43 @@ import { _t } from "@web/core/l10n/translation";
 import { registry } from "@web/core/registry";
 import { Interaction } from "@web/public/interaction";
 
-const SEARCH_URL = "/dynamic_sales_request/staff/search";
 const DEBOUNCE_MS = 300;
-const MAX_RESULTS = 5;
 
 /**
- * Turns the standard char_box input of a question flagged as
- * "Staff Sales Search" into a select-like searchable dropdown.
+ * Per-type configuration, keyed by the value of data-dsr-search-type set by
+ * the question template. To add another searchable dropdown, add an entry here
+ * (plus its flag, template value and endpoint on the Python side).
+ *
+ * Endpoint results are [{ name, value? }]: `value` (when present) is the text
+ * shown and saved as the answer, otherwise `name` is used.
+ */
+function getSearchConfig(type) {
+    const configs = {
+        staff: {
+            url: "/dynamic_sales_request/staff/search",
+            maxResults: 5,
+            needsTokens: false,
+            placeholder: _t("Pilih Staff Sales"),
+            searchPlaceholder: _t("Cari Staff Sales..."),
+            emptyText: _t("Staff Sales tidak ditemukan."),
+            failText: _t("Pencarian Staff Sales gagal. Silakan coba lagi."),
+        },
+        customer: {
+            url: "/dynamic_sales_request/customer/search",
+            maxResults: 10,
+            needsTokens: true,
+            placeholder: _t("Pilih Customer"),
+            searchPlaceholder: _t("Cari Customer..."),
+            emptyText: _t("Customer tidak ditemukan."),
+            failText: _t("Pencarian Customer gagal. Silakan coba lagi."),
+        },
+    };
+    return configs[type];
+}
+
+/**
+ * Turns the standard char_box input of a flagged question (Staff Sales or
+ * Customer Search) into a select-like searchable dropdown.
  *
  * The original input stays the submitted field (same name and
  * data-question-type), so the core SurveyForm validates and submits it and the
@@ -16,8 +46,8 @@ const MAX_RESULTS = 5;
  * its value can only be set by picking an option. The search box lives in a
  * separate panel and has no name, so it is never submitted.
  */
-export class StaffSalesSearch extends Interaction {
-    static selector = "input[data-dsr-staff-sales]";
+export class DynamicSearchDropdown extends Interaction {
+    static selector = "input[data-dsr-search-type]";
 
     dynamicContent = {
         _root: {
@@ -30,6 +60,11 @@ export class StaffSalesSearch extends Interaction {
     };
 
     setup() {
+        this.config = getSearchConfig(this.el.dataset.dsrSearchType);
+        const formDataset = this.el.closest("form.o_survey-fill-form")?.dataset || {};
+        this.surveyToken = formDataset.surveyToken || "";
+        this.answerToken = formDataset.answerToken || "";
+
         this.isOpen = false;
         this.searchTimer = null;
         this.searchSequence = 0;
@@ -44,7 +79,7 @@ export class StaffSalesSearch extends Interaction {
         this.searchEl = document.createElement("input");
         this.searchEl.type = "search";
         this.searchEl.className = "form-control form-control-sm o_dsr_staff_sales_search";
-        this.searchEl.placeholder = _t("Cari Staff Sales...");
+        this.searchEl.placeholder = this.config.searchPlaceholder;
         this.searchEl.autocomplete = "off";
         searchWrapEl.appendChild(this.searchEl);
 
@@ -61,7 +96,7 @@ export class StaffSalesSearch extends Interaction {
         this.el.classList.remove("form-control");
         this.el.classList.add("form-select", "o_dsr_staff_sales_trigger");
         if (!this.el.placeholder) {
-            this.el.placeholder = _t("Pilih Staff Sales");
+            this.el.placeholder = this.config.placeholder;
         }
         this.el.setAttribute("role", "combobox");
         this.el.setAttribute("aria-haspopup", "listbox");
@@ -194,18 +229,23 @@ export class StaffSalesSearch extends Interaction {
         let records = [];
         let failed = false;
         try {
+            const params = new URLSearchParams({ q: query });
+            if (this.config.needsTokens) {
+                params.set("survey_token", this.surveyToken);
+                params.set("answer_token", this.answerToken);
+            }
             const response = await this.waitFor(
-                fetch(`${SEARCH_URL}?q=${encodeURIComponent(query)}`, {
+                fetch(`${this.config.url}?${params.toString()}`, {
                     method: "GET",
                     credentials: "same-origin",
                     headers: { Accept: "application/json" },
                 })
             );
             if (!response.ok) {
-                throw new Error(`Staff search failed (${response.status})`);
+                throw new Error(`Search failed (${response.status})`);
             }
             const payload = await this.waitFor(response.json());
-            records = (payload.results || []).slice(0, MAX_RESULTS);
+            records = (payload.results || []).slice(0, this.config.maxResults);
         } catch {
             failed = true;
         }
@@ -213,9 +253,9 @@ export class StaffSalesSearch extends Interaction {
             return; // Superseded by a newer search, or the dropdown was closed.
         }
         if (failed) {
-            this.renderMessage(_t("Pencarian Staff Sales gagal. Silakan coba lagi."));
+            this.renderMessage(this.config.failText);
         } else if (!records.length) {
-            this.renderMessage(_t("Staff Sales tidak ditemukan."));
+            this.renderMessage(this.config.emptyText);
         } else {
             this.renderResults(records);
         }
@@ -234,6 +274,7 @@ export class StaffSalesSearch extends Interaction {
         this.resultsEl.replaceChildren();
         this.activeIndex = -1;
         for (const record of records) {
+            const text = record.value || record.name;
             const itemEl = document.createElement("li");
             itemEl.className = "list-group-item p-0";
             itemEl.setAttribute("role", "option");
@@ -241,9 +282,9 @@ export class StaffSalesSearch extends Interaction {
             const buttonEl = document.createElement("button");
             buttonEl.type = "button";
             buttonEl.className = "o_dsr_staff_sales_option btn btn-link w-100 text-start";
-            buttonEl.dataset.name = record.name;
-            buttonEl.textContent = record.name;
-            const isSelected = record.name === this.el.value;
+            buttonEl.dataset.name = text;
+            buttonEl.textContent = text;
+            const isSelected = text === this.el.value;
             buttonEl.classList.toggle("fw-bold", isSelected);
             itemEl.setAttribute("aria-selected", String(isSelected));
 
@@ -274,4 +315,4 @@ export class StaffSalesSearch extends Interaction {
 
 registry
     .category("public.interactions")
-    .add("custom_survey.StaffSalesSearch", StaffSalesSearch);
+    .add("custom_survey.DynamicSearchDropdown", DynamicSearchDropdown);
