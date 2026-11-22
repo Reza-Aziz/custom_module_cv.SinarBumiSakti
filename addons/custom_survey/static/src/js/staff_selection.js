@@ -11,6 +11,7 @@ const DEBOUNCE_MS = 300;
  *
  * Endpoint results are [{ name, value? }]: `value` (when present) is the text
  * shown and saved as the answer, otherwise `name` is used.
+ * `clearable` adds a "×" button that empties the selected value.
  */
 function getSearchConfig(type) {
     const configs = {
@@ -18,6 +19,7 @@ function getSearchConfig(type) {
             url: "/dynamic_sales_request/staff/search",
             maxResults: 5,
             needsTokens: false,
+            clearable: false,
             placeholder: _t("Pilih Staff Sales"),
             searchPlaceholder: _t("Cari Staff Sales..."),
             emptyText: _t("Staff Sales tidak ditemukan."),
@@ -27,6 +29,7 @@ function getSearchConfig(type) {
             url: "/dynamic_sales_request/customer/search",
             maxResults: 10,
             needsTokens: true,
+            clearable: true,
             placeholder: _t("Pilih Customer"),
             searchPlaceholder: _t("Cari Customer..."),
             emptyText: _t("Customer tidak ditemukan."),
@@ -45,6 +48,10 @@ function getSearchConfig(type) {
  * core controller saves it as a survey.user_input.line. It becomes readonly:
  * its value can only be set by picking an option. The search box lives in a
  * separate panel and has no name, so it is never submitted.
+ *
+ * The input value is the only selection state: clearing it (the "×" button)
+ * fully resets the selection, and the standard required validation then
+ * applies again on the empty input.
  */
 export class DynamicSearchDropdown extends Interaction {
     static selector = "input[data-dsr-search-type]";
@@ -88,6 +95,17 @@ export class DynamicSearchDropdown extends Interaction {
         this.resultsEl.setAttribute("role", "listbox");
 
         this.panelEl.append(searchWrapEl, this.resultsEl);
+
+        // Clear ("×") button, only for configurations flagged `clearable`.
+        this.clearEl = null;
+        if (this.config.clearable) {
+            this.clearEl = document.createElement("button");
+            this.clearEl.type = "button";
+            this.clearEl.className = "o_dsr_staff_sales_clear d-none";
+            this.clearEl.textContent = "×";
+            this.clearEl.title = _t("Hapus pilihan");
+            this.clearEl.setAttribute("aria-label", _t("Hapus pilihan"));
+        }
     }
 
     start() {
@@ -104,6 +122,13 @@ export class DynamicSearchDropdown extends Interaction {
 
         this.el.parentElement.classList.add("position-relative");
         this.insert(this.panelEl, this.el.parentElement);
+
+        if (this.clearEl) {
+            this.el.classList.add("o_dsr_staff_sales_clearable");
+            this.insert(this.clearEl, this.el.parentElement);
+            this.addListener(this.clearEl, "click", (ev) => this.onClearClick(ev));
+            this.updateClearButton(); // A restored answer shows the "×" at once.
+        }
 
         this.addListener(this.searchEl, "input", () => this.onSearchInput());
         this.addListener(this.searchEl, "keydown", (ev) => this.onSearchKeyDown(ev));
@@ -172,6 +197,17 @@ export class DynamicSearchDropdown extends Interaction {
         if (this.isOpen && ev.target !== this.el && !this.panelEl.contains(ev.target)) {
             this.close();
         }
+    }
+
+    onClearClick(ev) {
+        ev.preventDefault();
+        // Keep the document click handler from closing the dropdown reopened below.
+        ev.stopPropagation();
+        this.el.value = "";
+        this.updateClearButton();
+        // Restart with an empty search so another selection can be made at once.
+        this.close();
+        this.open();
     }
 
     onSearchInput() {
@@ -298,7 +334,20 @@ export class DynamicSearchDropdown extends Interaction {
 
     selectName(name) {
         this.el.value = name;
+        this.updateClearButton();
         this.close({ refocus: true });
+    }
+
+    updateClearButton() {
+        if (!this.clearEl) {
+            return;
+        }
+        const hasValue = Boolean(this.el.value);
+        this.clearEl.classList.toggle("d-none", !hasValue);
+        if (hasValue && this.el.offsetHeight) {
+            // Same height as the input (it is larger in "page per question").
+            this.clearEl.style.height = `${this.el.offsetHeight}px`;
+        }
     }
 
     getOptionEls() {
