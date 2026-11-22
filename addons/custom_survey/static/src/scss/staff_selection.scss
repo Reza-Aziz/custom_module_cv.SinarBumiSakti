@@ -1,13 +1,18 @@
-.o_survey_comment_container:has(> input[data-dsr-staff-sales]) {
-    position: relative;
+.o_dsr_staff_sales_trigger {
+    cursor: pointer;
+    caret-color: transparent;
+    text-overflow: ellipsis;
+}
+
+.o_dsr_staff_sales_panel {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    margin-top: 0.25rem;
 
     .o_dsr_staff_sales_results {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 10;
-        margin-top: 0.25rem;
         max-height: 16rem;
         overflow-y: auto;
     }

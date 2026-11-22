@@ -16,11 +16,9 @@ class DynamicStaffController(http.Controller):
         csrf=False,
     )
     def search_staff(self, **kwargs):
+        # Empty query is allowed: it returns the first
+        # STAFF_SALES_SEARCH_LIMIT records so the dropdown has content on open.
         query = (request.httprequest.args.get('q') or '').strip()[:100]
-
-        # Do not return the Staff Sales directory for an empty query.
-        if not query:
-            return self._json_response({'results': []})
 
         domain = request.env['survey.question']._get_staff_sales_domain(query)
         staff_records = request.env['res.partner'].sudo().search_read(

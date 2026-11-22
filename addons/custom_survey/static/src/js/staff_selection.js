@@ -8,74 +8,151 @@ const MAX_RESULTS = 5;
 
 /**
  * Turns the standard char_box input of a question flagged as
- * "Staff Sales Search" into a searchable dropdown.
+ * "Staff Sales Search" into a select-like searchable dropdown.
  *
- * The input keeps its standard name / data-question-type, so the core
- * SurveyForm validates and submits it and the core controller saves it as a
- * survey.user_input.line. This interaction only guarantees that the input
- * value is either empty or a value picked from the dropdown.
+ * The original input stays the submitted field (same name and
+ * data-question-type), so the core SurveyForm validates and submits it and the
+ * core controller saves it as a survey.user_input.line. It becomes readonly:
+ * its value can only be set by picking an option. The search box lives in a
+ * separate panel and has no name, so it is never submitted.
  */
 export class StaffSalesSearch extends Interaction {
     static selector = "input[data-dsr-staff-sales]";
 
     dynamicContent = {
         _root: {
-            "t-on-input": this.onInput,
-            "t-on-keydown": this.onKeyDown,
-            "t-on-focusout": this.onFocusOut,
+            "t-on-click": this.onTriggerClick,
+            "t-on-keydown": this.onTriggerKeyDown,
+        },
+        _document: {
+            "t-on-click": this.onDocumentClick,
         },
     };
 
     setup() {
-        // A value restored from a previous answer counts as already selected.
-        this.selectedName = this.el.value.trim();
+        this.isOpen = false;
         this.searchTimer = null;
         this.searchSequence = 0;
         this.activeIndex = -1;
 
+        this.panelEl = document.createElement("div");
+        this.panelEl.className =
+            "o_dsr_staff_sales_panel bg-body border rounded shadow-sm d-none";
+
+        const searchWrapEl = document.createElement("div");
+        searchWrapEl.className = "p-2 border-bottom";
+        this.searchEl = document.createElement("input");
+        this.searchEl.type = "search";
+        this.searchEl.className = "form-control form-control-sm o_dsr_staff_sales_search";
+        this.searchEl.placeholder = _t("Cari Staff Sales...");
+        this.searchEl.autocomplete = "off";
+        searchWrapEl.appendChild(this.searchEl);
+
         this.resultsEl = document.createElement("ul");
-        this.resultsEl.className = "o_dsr_staff_sales_results list-group d-none";
+        this.resultsEl.className = "o_dsr_staff_sales_results list-group list-group-flush";
         this.resultsEl.setAttribute("role", "listbox");
 
-        this.el.setAttribute("role", "combobox");
-        this.el.setAttribute("aria-autocomplete", "list");
-        this.el.setAttribute("aria-expanded", "false");
+        this.panelEl.append(searchWrapEl, this.resultsEl);
     }
 
     start() {
-        this.insert(this.resultsEl, this.el.parentElement);
-        // Keep the focus on the input so focusout does not fire (and clear the
-        // value) before the click selects an option.
-        this.addListener(this.resultsEl, "mousedown", (ev) => this.onResultsMouseDown(ev));
+        // Select-box look; value can only come from the dropdown.
+        this.el.readOnly = true;
+        this.el.classList.remove("form-control");
+        this.el.classList.add("form-select", "o_dsr_staff_sales_trigger");
+        if (!this.el.placeholder) {
+            this.el.placeholder = _t("Pilih Staff Sales");
+        }
+        this.el.setAttribute("role", "combobox");
+        this.el.setAttribute("aria-haspopup", "listbox");
+        this.el.setAttribute("aria-expanded", "false");
+
+        this.el.parentElement.classList.add("position-relative");
+        this.insert(this.panelEl, this.el.parentElement);
+
+        this.addListener(this.searchEl, "input", () => this.onSearchInput());
+        this.addListener(this.searchEl, "keydown", (ev) => this.onSearchKeyDown(ev));
+        this.addListener(this.resultsEl, "click", (ev) => this.onResultsClick(ev));
     }
 
     destroy() {
         window.clearTimeout(this.searchTimer);
     }
 
+    // Open / close
+    // -------------------------------------------------------------------------
+
+    open() {
+        if (this.isOpen) {
+            return;
+        }
+        this.isOpen = true;
+        this.panelEl.classList.remove("d-none");
+        this.el.setAttribute("aria-expanded", "true");
+        this.searchEl.value = "";
+        this.search("");
+        this.searchEl.focus();
+    }
+
+    close({ refocus = false } = {}) {
+        if (!this.isOpen) {
+            return;
+        }
+        this.isOpen = false;
+        window.clearTimeout(this.searchTimer);
+        this.searchSequence++; // Ignore any response still in flight.
+        this.panelEl.classList.add("d-none");
+        this.resultsEl.replaceChildren();
+        this.activeIndex = -1;
+        this.el.setAttribute("aria-expanded", "false");
+        if (refocus) {
+            this.el.focus();
+        }
+    }
+
     // Handlers
     // -------------------------------------------------------------------------
 
-    onInput() {
-        const value = this.el.value.trim();
-        if (value !== this.selectedName) {
-            this.selectedName = "";
+    onTriggerClick() {
+        if (this.isOpen) {
+            this.close();
+        } else {
+            this.open();
         }
-        window.clearTimeout(this.searchTimer);
-        this.hideResults();
-        if (!value) {
-            this.searchSequence++;
-            return;
-        }
-        this.searchTimer = window.setTimeout(() => this.search(value), DEBOUNCE_MS);
     }
 
-    onKeyDown(ev) {
+    onTriggerKeyDown(ev) {
+        if (ev.ctrlKey || ev.metaKey) {
+            return; // Leave Ctrl/Cmd+Enter to the survey (force submit).
+        }
+        if (ev.key === "Enter" || ev.key === " " || ev.key === "ArrowDown") {
+            ev.preventDefault();
+            this.open();
+        } else if (ev.key === "Escape") {
+            this.close();
+        }
+    }
+
+    onDocumentClick(ev) {
+        if (this.isOpen && ev.target !== this.el && !this.panelEl.contains(ev.target)) {
+            this.close();
+        }
+    }
+
+    onSearchInput() {
+        window.clearTimeout(this.searchTimer);
+        this.searchTimer = window.setTimeout(
+            () => this.search(this.searchEl.value.trim()),
+            DEBOUNCE_MS
+        );
+    }
+
+    onSearchKeyDown(ev) {
         const options = this.getOptionEls();
         switch (ev.key) {
             case "ArrowDown":
             case "ArrowUp": {
-                if (!options.length || this.resultsEl.classList.contains("d-none")) {
+                if (!options.length) {
                     return;
                 }
                 ev.preventDefault();
@@ -83,31 +160,23 @@ export class StaffSalesSearch extends Interaction {
                 this.setActiveIndex((this.activeIndex + step + options.length) % options.length);
                 break;
             }
-            case "Enter":
-                if (this.activeIndex >= 0 && options[this.activeIndex]) {
-                    ev.preventDefault();
-                    this.selectName(options[this.activeIndex].dataset.name);
+            case "Enter": {
+                // Never let Enter submit the survey from the search box.
+                ev.preventDefault();
+                const index = this.activeIndex >= 0 ? this.activeIndex : options.length === 1 ? 0 : -1;
+                if (options[index]) {
+                    this.selectName(options[index].dataset.name);
                 }
                 break;
+            }
             case "Escape":
-                this.hideResults();
+                ev.preventDefault();
+                this.close({ refocus: true });
                 break;
         }
     }
 
-    onFocusOut() {
-        window.clearTimeout(this.searchTimer);
-        this.searchSequence++;
-        this.hideResults();
-        // Free text is not an answer: only a selected value is kept.
-        if (this.el.value.trim() !== this.selectedName) {
-            this.el.value = "";
-            this.selectedName = "";
-        }
-    }
-
-    onResultsMouseDown(ev) {
-        ev.preventDefault();
+    onResultsClick(ev) {
         const optionEl = ev.target.closest("button[data-name]");
         if (optionEl) {
             this.selectName(optionEl.dataset.name);
@@ -119,6 +188,9 @@ export class StaffSalesSearch extends Interaction {
 
     async search(query) {
         const sequence = ++this.searchSequence;
+        if (!this.resultsEl.children.length) {
+            this.renderMessage(_t("Memuat..."));
+        }
         let records = [];
         let failed = false;
         try {
@@ -138,40 +210,46 @@ export class StaffSalesSearch extends Interaction {
             failed = true;
         }
         if (sequence !== this.searchSequence) {
-            return; // A newer search (or a focusout) superseded this one.
+            return; // Superseded by a newer search, or the dropdown was closed.
         }
-        this.renderResults(records, failed);
+        if (failed) {
+            this.renderMessage(_t("Pencarian Staff Sales gagal. Silakan coba lagi."));
+        } else if (!records.length) {
+            this.renderMessage(_t("Staff Sales tidak ditemukan."));
+        } else {
+            this.renderResults(records);
+        }
     }
 
-    renderResults(records, failed) {
+    renderMessage(text) {
         this.resultsEl.replaceChildren();
         this.activeIndex = -1;
+        const messageEl = document.createElement("li");
+        messageEl.className = "list-group-item text-muted";
+        messageEl.textContent = text;
+        this.resultsEl.appendChild(messageEl);
+    }
 
-        if (failed || !records.length) {
-            const emptyEl = document.createElement("li");
-            emptyEl.className = "list-group-item text-muted";
-            emptyEl.textContent = failed
-                ? _t("Pencarian Staff Sales gagal. Silakan coba lagi.")
-                : _t("Staff Sales tidak ditemukan.");
-            this.resultsEl.appendChild(emptyEl);
-        } else {
-            for (const record of records) {
-                const itemEl = document.createElement("li");
-                itemEl.className = "list-group-item p-0";
-                itemEl.setAttribute("role", "option");
+    renderResults(records) {
+        this.resultsEl.replaceChildren();
+        this.activeIndex = -1;
+        for (const record of records) {
+            const itemEl = document.createElement("li");
+            itemEl.className = "list-group-item p-0";
+            itemEl.setAttribute("role", "option");
 
-                const buttonEl = document.createElement("button");
-                buttonEl.type = "button";
-                buttonEl.className = "o_dsr_staff_sales_option btn btn-link w-100 text-start";
-                buttonEl.dataset.name = record.name;
-                buttonEl.textContent = record.name;
+            const buttonEl = document.createElement("button");
+            buttonEl.type = "button";
+            buttonEl.className = "o_dsr_staff_sales_option btn btn-link w-100 text-start";
+            buttonEl.dataset.name = record.name;
+            buttonEl.textContent = record.name;
+            const isSelected = record.name === this.el.value;
+            buttonEl.classList.toggle("fw-bold", isSelected);
+            itemEl.setAttribute("aria-selected", String(isSelected));
 
-                itemEl.appendChild(buttonEl);
-                this.resultsEl.appendChild(itemEl);
-            }
+            itemEl.appendChild(buttonEl);
+            this.resultsEl.appendChild(itemEl);
         }
-        this.resultsEl.classList.remove("d-none");
-        this.el.setAttribute("aria-expanded", "true");
     }
 
     // Selection helpers
@@ -179,9 +257,7 @@ export class StaffSalesSearch extends Interaction {
 
     selectName(name) {
         this.el.value = name;
-        this.selectedName = name;
-        this.searchSequence++;
-        this.hideResults();
+        this.close({ refocus: true });
     }
 
     getOptionEls() {
@@ -193,13 +269,6 @@ export class StaffSalesSearch extends Interaction {
         options.forEach((el, i) => el.classList.toggle("active", i === index));
         this.activeIndex = index;
         options[index]?.scrollIntoView({ block: "nearest" });
-    }
-
-    hideResults() {
-        this.resultsEl.classList.add("d-none");
-        this.resultsEl.replaceChildren();
-        this.activeIndex = -1;
-        this.el.setAttribute("aria-expanded", "false");
     }
 }
 
