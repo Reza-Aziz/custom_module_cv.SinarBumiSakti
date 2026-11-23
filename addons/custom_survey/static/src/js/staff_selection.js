@@ -65,6 +65,10 @@ function getSearchConfig(type) {
  * The input value is the only selection state: clearing it (the "×" button)
  * fully resets the selection, and the standard required validation then
  * applies again on the empty input.
+ *
+ * Every selection or clearing fires a bubbling "dsr-selection-change"
+ * CustomEvent whose detail.record is the chosen endpoint record (or null), so
+ * other components (e.g. product lines) can react without polling.
  */
 export class DynamicSearchDropdown extends Interaction {
     static selector = "input[data-dsr-search-type]";
@@ -89,6 +93,7 @@ export class DynamicSearchDropdown extends Interaction {
         this.searchTimer = null;
         this.searchSequence = 0;
         this.activeIndex = -1;
+        this.records = new Map(); // displayed text -> endpoint record
 
         this.panelEl = document.createElement("div");
         this.panelEl.className =
@@ -218,6 +223,7 @@ export class DynamicSearchDropdown extends Interaction {
         ev.stopPropagation();
         this.el.value = "";
         this.updateClearButton();
+        this.notifySelection(null);
         // Restart with an empty search so another selection can be made at once.
         this.close();
         this.open();
@@ -322,8 +328,11 @@ export class DynamicSearchDropdown extends Interaction {
     renderResults(records) {
         this.resultsEl.replaceChildren();
         this.activeIndex = -1;
+        this.records.clear();
         for (const record of records) {
             const text = record.value || record.name;
+            this.records.set(text, record);
+
             const itemEl = document.createElement("li");
             itemEl.className = "list-group-item p-0";
             itemEl.setAttribute("role", "option");
@@ -358,7 +367,14 @@ export class DynamicSearchDropdown extends Interaction {
     selectName(name) {
         this.el.value = name;
         this.updateClearButton();
+        this.notifySelection(this.records.get(name) || null);
         this.close({ refocus: true });
+    }
+
+    notifySelection(record) {
+        this.el.dispatchEvent(
+            new CustomEvent("dsr-selection-change", { bubbles: true, detail: { record } })
+        );
     }
 
     updateClearButton() {

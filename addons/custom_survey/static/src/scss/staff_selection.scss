@@ -56,3 +56,21 @@
         }
     }
 }
+
+// Product lines: disabled until the Product question has a value.
+.o_dsr_lines_disabled .o_dsr_lines_content {
+    opacity: 0.5;
+}
+
+// Quantity : UoM = 3 : 2
+.o_dsr_line_amounts {
+    .o_dsr_line_qty {
+        flex: 3 1 0;
+        min-width: 0;
+    }
+
+    .o_dsr_line_uom {
+        flex: 2 1 0;
+        min-width: 0;
+    }
+}

@@ -1,3 +1,5 @@
+import json
+import math
 import re
 
 from odoo import _, api, fields, models
@@ -7,6 +9,7 @@ from odoo.exceptions import ValidationError
 # exact record can be resolved later even when several records share a name.
 ID_ANSWER_RE = re.compile(r'^(?P<name>.+) \(ID: (?P<id>\d+)\)$')
 SEARCH_MAX_TOKENS = 5
+PRODUCT_LINES_MAX = 50
 
 
 class SurveyQuestion(models.Model):
@@ -34,20 +37,74 @@ class SurveyQuestion(models.Model):
              "Internal Reference. Only a value selected from that list is "
              "accepted; it is saved as '<product label> (ID: <id>)'.",
     )
+    is_product_lines = fields.Boolean(
+        string='Product Lines',
+        default=False,
+        help="If checked, this text box question becomes a chain of product "
+             "lines (product, quantity, UoM). The lines are saved as a JSON "
+             "list and validated on the server.",
+    )
+    product_lines_product_question_id = fields.Many2one(
+        'survey.question',
+        string='Product Question (FR-005)',
+        ondelete='set null',
+        help="Product Search question that must be answered before the "
+             "product lines are enabled.",
+    )
+    product_lines_uoms_json = fields.Char(
+        compute='_compute_product_lines_uoms_json',
+        help="Active units of measure (JSON) rendered into the survey page "
+             "for the product lines UoM dropdown. Not stored: it always "
+             "follows the latest master data.",
+    )
 
-    @api.constrains('is_staff_sales_search', 'is_customer_search', 'is_product_search')
+    @api.constrains(
+        'is_staff_sales_search', 'is_customer_search',
+        'is_product_search', 'is_product_lines',
+    )
     def _check_dynamic_search_exclusive(self):
         for question in self:
             flags = (
                 question.is_staff_sales_search,
                 question.is_customer_search,
                 question.is_product_search,
+                question.is_product_lines,
             )
             if sum(bool(flag) for flag in flags) > 1:
                 raise ValidationError(_(
-                    "A question can use only one dynamic search type "
-                    "(Staff Sales, Customer or Product)."
+                    "A question can use only one dynamic type "
+                    "(Staff Sales, Customer, Product or Product Lines)."
                 ))
+
+    @api.constrains('is_product_lines', 'product_lines_product_question_id')
+    def _check_product_lines_config(self):
+        for question in self:
+            if not question.is_product_lines:
+                continue
+            product_question = question.product_lines_product_question_id
+            if not product_question:
+                raise ValidationError(_(
+                    "Product Lines requires the Product question (FR-005)."
+                ))
+            if (product_question.survey_id != question.survey_id
+                    or not product_question.is_product_search):
+                raise ValidationError(_(
+                    "The Product question must be a Product Search question "
+                    "of the same survey."
+                ))
+
+    @api.depends('is_product_lines')
+    def _compute_product_lines_uoms_json(self):
+        flagged = self.filtered('is_product_lines')
+        options = False
+        if flagged:
+            uoms = self.env['uom.uom'].sudo().search(self._get_product_lines_uom_domain())
+            options = json.dumps(
+                [{'id': uom.id, 'name': uom.display_name} for uom in uoms],
+                ensure_ascii=False,
+            )
+        for question in self:
+            question.product_lines_uoms_json = options if question in flagged else False
 
     # Staff Sales
     # -------------------------------------------------------------------------
@@ -104,6 +161,16 @@ class SurveyQuestion(models.Model):
     def _format_product_answer(self, product):
         return "%s (ID: %s)" % (product.display_name, product.id)
 
+    # Product lines
+    # -------------------------------------------------------------------------
+
+    @api.model
+    def _get_product_lines_uom_domain(self):
+        """Units of measure selectable in a product line (master data uom.uom)."""
+        if 'active' in self.env['uom.uom']._fields:
+            return [('active', '=', True)]
+        return []
+
     # Validation (backend is authoritative)
     # -------------------------------------------------------------------------
 
@@ -117,6 +184,8 @@ class SurveyQuestion(models.Model):
             return self._validate_customer_answer(answer)
         if self.is_product_search:
             return self._validate_product_answer(answer)
+        if self.is_product_lines:
+            return self._validate_product_lines_answer(answer)
         return errors
 
     def _validate_staff_sales_answer(self, answer):
@@ -159,3 +228,68 @@ class SurveyQuestion(models.Model):
         if not self.env['product.product'].sudo().search_count(domain, limit=1):
             return error
         return {}
+
+    def _validate_product_lines_answer(self, answer):
+        # The answer is a JSON list of {product_id, quantity, uom_id, more, ...}.
+        # product_id, quantity, uom_id and more are authoritative; the other
+        # keys are informational. The chain must be closed: every line but the
+        # last has more="yes" and the last one has more="no".
+        error = {self.id: _(
+            "Daftar produk tidak valid. Lengkapi semua baris produk."
+        )}
+        try:
+            lines = json.loads(answer)
+        except ValueError:
+            return error
+        if not isinstance(lines, list) or not lines or len(lines) > PRODUCT_LINES_MAX:
+            return error
+
+        Product = self.env['product.product'].sudo()
+        Uom = self.env['uom.uom'].sudo()
+        problems = []
+        for index, line in enumerate(lines, start=1):
+            if not isinstance(line, dict):
+                return error
+            problem = self._get_product_line_problem(
+                Product, Uom, line, is_last=index == len(lines)
+            )
+            if problem:
+                problems.append(_("Baris %s: %s") % (index, problem))
+        if problems:
+            return {self.id: " ".join(problems)}
+        return {}
+
+    def _get_product_line_problem(self, Product, Uom, line, is_last):
+        product_id = line.get('product_id')
+        quantity = line.get('quantity')
+        uom_id = line.get('uom_id')
+        more = line.get('more')
+
+        if not isinstance(product_id, int) or isinstance(product_id, bool):
+            return _("produk belum dipilih.")
+        if not Product.search_count(
+            self._get_product_domain() + [('id', '=', product_id)], limit=1
+        ):
+            return _("produk tidak valid atau sudah tidak aktif.")
+        if (
+            not isinstance(quantity, (int, float))
+            or isinstance(quantity, bool)
+            or not math.isfinite(quantity)
+            or quantity <= 0
+        ):
+            return _("quantity harus lebih dari 0.")
+        if (
+            not isinstance(uom_id, int)
+            or isinstance(uom_id, bool)
+            or not Uom.search_count(
+                self._get_product_lines_uom_domain() + [('id', '=', uom_id)], limit=1
+            )
+        ):
+            return _("UoM belum dipilih atau tidak valid.")
+        if more not in ('yes', 'no'):
+            return _("jawab pertanyaan 'Apakah ada produk tambahan?'.")
+        if is_last and more != 'no':
+            return _("pilih 'Tidak ada lagi' pada baris terakhir untuk menyelesaikan.")
+        if not is_last and more != 'yes':
+            return _("jawaban harus 'Ya' karena masih ada baris berikutnya.")
+        return False

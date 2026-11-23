@@ -13,6 +13,7 @@
     'assets': {
         'survey.survey_assets': [
             'custom_survey/static/src/js/staff_selection.js',
+            'custom_survey/static/src/js/product_lines.js',
             'custom_survey/static/src/scss/staff_selection.scss',
         ],
     },
