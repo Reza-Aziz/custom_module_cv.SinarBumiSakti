@@ -29,7 +29,6 @@ services:
     volumes:
       - odoo-data:/var/lib/odoo
       - ./addons:/mnt/extra-addons
-    tty: true
 
 volumes:
   db-data:
