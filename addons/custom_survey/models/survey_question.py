@@ -3,10 +3,10 @@ import re
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
 
-# Customer answers are stored as "<name> (ID: <res.partner id>)" so the exact
-# record can be resolved later even when several partners share the same name.
-CUSTOMER_ANSWER_RE = re.compile(r'^(?P<name>.+) \(ID: (?P<id>\d+)\)$')
-CUSTOMER_SEARCH_MAX_TOKENS = 5
+# Customer and product answers are stored as "<label> (ID: <record id>)" so the
+# exact record can be resolved later even when several records share a name.
+ID_ANSWER_RE = re.compile(r'^(?P<name>.+) \(ID: (?P<id>\d+)\)$')
+SEARCH_MAX_TOKENS = 5
 
 
 class SurveyQuestion(models.Model):
@@ -26,13 +26,27 @@ class SurveyQuestion(models.Model):
              "of active Contacts (res.partner). Only a value selected from "
              "that list is accepted; it is saved as '<name> (ID: <id>)'.",
     )
+    is_product_search = fields.Boolean(
+        string='Product Search',
+        default=False,
+        help="If checked, this text box question becomes a searchable dropdown "
+             "of active products (product.product), searchable by name or "
+             "Internal Reference. Only a value selected from that list is "
+             "accepted; it is saved as '<product label> (ID: <id>)'.",
+    )
 
-    @api.constrains('is_staff_sales_search', 'is_customer_search')
+    @api.constrains('is_staff_sales_search', 'is_customer_search', 'is_product_search')
     def _check_dynamic_search_exclusive(self):
         for question in self:
-            if question.is_staff_sales_search and question.is_customer_search:
+            flags = (
+                question.is_staff_sales_search,
+                question.is_customer_search,
+                question.is_product_search,
+            )
+            if sum(bool(flag) for flag in flags) > 1:
                 raise ValidationError(_(
-                    "A question cannot be both a Staff Sales Search and a Customer Search."
+                    "A question can use only one dynamic search type "
+                    "(Staff Sales, Customer or Product)."
                 ))
 
     # Staff Sales
@@ -61,13 +75,34 @@ class SurveyQuestion(models.Model):
         unresolved: adjust here only.
         """
         domain = [('active', '=', True)]
-        for token in (query or '').split()[:CUSTOMER_SEARCH_MAX_TOKENS]:
+        for token in (query or '').split()[:SEARCH_MAX_TOKENS]:
             domain.append(('name', 'ilike', token))
         return domain
 
     @api.model
     def _format_customer_answer(self, partner_id, name):
         return "%s (ID: %s)" % (name, partner_id)
+
+    # Product
+    # -------------------------------------------------------------------------
+
+    @api.model
+    def _get_product_domain(self, query=None):
+        """Single source of truth for the Product filter (PRD FR-005).
+
+        Active products only. Every word of the query must appear in the name
+        or in the Internal Reference (case-insensitive, any order). PRD open
+        decision OD-005 (all active products vs sales-only) is unresolved:
+        adjust here only.
+        """
+        domain = [('active', '=', True)]
+        for token in (query or '').split()[:SEARCH_MAX_TOKENS]:
+            domain += ['|', ('name', 'ilike', token), ('default_code', 'ilike', token)]
+        return domain
+
+    @api.model
+    def _format_product_answer(self, product):
+        return "%s (ID: %s)" % (product.display_name, product.id)
 
     # Validation (backend is authoritative)
     # -------------------------------------------------------------------------
@@ -80,6 +115,8 @@ class SurveyQuestion(models.Model):
             return self._validate_staff_sales_answer(answer)
         if self.is_customer_search:
             return self._validate_customer_answer(answer)
+        if self.is_product_search:
+            return self._validate_product_answer(answer)
         return errors
 
     def _validate_staff_sales_answer(self, answer):
@@ -97,7 +134,7 @@ class SurveyQuestion(models.Model):
         error = {self.id: _(
             "Customer tidak valid. Pilih Customer dari hasil pencarian."
         )}
-        match = CUSTOMER_ANSWER_RE.match(answer)
+        match = ID_ANSWER_RE.match(answer)
         if not match:
             return error
         domain = self._get_customer_domain() + [
@@ -105,5 +142,20 @@ class SurveyQuestion(models.Model):
             ('name', '=', match.group('name')),
         ]
         if not self.env['res.partner'].sudo().search_count(domain, limit=1):
+            return error
+        return {}
+
+    def _validate_product_answer(self, answer):
+        # The answer must be "<label> (ID: <id>)" where <id> is an existing,
+        # active product. The id is authoritative; the label is informational
+        # (it can legitimately differ by language or after a rename).
+        error = {self.id: _(
+            "Produk tidak valid. Pilih Produk dari hasil pencarian."
+        )}
+        match = ID_ANSWER_RE.match(answer)
+        if not match:
+            return error
+        domain = self._get_product_domain() + [('id', '=', int(match.group('id')))]
+        if not self.env['product.product'].sudo().search_count(domain, limit=1):
             return error
         return {}

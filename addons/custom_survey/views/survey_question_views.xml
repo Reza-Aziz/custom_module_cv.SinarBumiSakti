@@ -7,7 +7,9 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='save_as_nickname']/parent::group" position="after">
                 <group invisible="question_type != 'char_box'">
-                    <field name="is_staff_sales_search"/>
+                    <field name="is_staff_sales_search" readonly="is_customer_search or is_product_search"/>
+                    <field name="is_customer_search" readonly="is_staff_sales_search or is_product_search"/>
+                    <field name="is_product_search" readonly="is_staff_sales_search or is_customer_search"/>
                 </group>
             </xpath>
         </field>

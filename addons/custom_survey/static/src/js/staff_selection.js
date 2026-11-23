@@ -9,8 +9,11 @@ const DEBOUNCE_MS = 300;
  * the question template. To add another searchable dropdown, add an entry here
  * (plus its flag, template value and endpoint on the Python side).
  *
- * Endpoint results are [{ name, value? }]: `value` (when present) is the text
- * shown and saved as the answer, otherwise `name` is used.
+ * Endpoint results are [{ name, value?, label?, detail? }]:
+ * - `value` (when present, else `name`) is the text shown in the input and
+ *   saved as the answer;
+ * - `label` (when present, else the value) is the first line of the candidate;
+ * - `detail` is an optional second line (e.g. SKU / UoM).
  * `clearable` adds a "×" button that empties the selected value.
  */
 function getSearchConfig(type) {
@@ -35,13 +38,23 @@ function getSearchConfig(type) {
             emptyText: _t("Customer tidak ditemukan."),
             failText: _t("Pencarian Customer gagal. Silakan coba lagi."),
         },
+        product: {
+            url: "/dynamic_sales_request/product/search",
+            maxResults: 10,
+            needsTokens: true,
+            clearable: true,
+            placeholder: _t("Pilih Produk"),
+            searchPlaceholder: _t("Cari nama produk atau SKU..."),
+            emptyText: _t("Produk tidak ditemukan."),
+            failText: _t("Pencarian Produk gagal. Silakan coba lagi."),
+        },
     };
     return configs[type];
 }
 
 /**
- * Turns the standard char_box input of a flagged question (Staff Sales or
- * Customer Search) into a select-like searchable dropdown.
+ * Turns the standard char_box input of a flagged question (Staff Sales,
+ * Customer or Product Search) into a select-like searchable dropdown.
  *
  * The original input stays the submitted field (same name and
  * data-question-type), so the core SurveyForm validates and submits it and the
@@ -319,7 +332,17 @@ export class DynamicSearchDropdown extends Interaction {
             buttonEl.type = "button";
             buttonEl.className = "o_dsr_staff_sales_option btn btn-link w-100 text-start";
             buttonEl.dataset.name = text;
-            buttonEl.textContent = text;
+
+            const labelEl = document.createElement("span");
+            labelEl.textContent = record.label || text;
+            buttonEl.appendChild(labelEl);
+            if (record.detail) {
+                const detailEl = document.createElement("small");
+                detailEl.className = "d-block text-muted";
+                detailEl.textContent = record.detail;
+                buttonEl.appendChild(detailEl);
+            }
+
             const isSelected = text === this.el.value;
             buttonEl.classList.toggle("fw-bold", isSelected);
             itemEl.setAttribute("aria-selected", String(isSelected));
