@@ -44,18 +44,18 @@ class SurveyQuestion(models.Model):
              "lines (product, quantity, UoM). The lines are saved as a JSON "
              "list and validated on the server.",
     )
-    product_lines_product_question_id = fields.Many2one(
-        'survey.question',
-        string='Product Question (FR-005)',
-        ondelete='set null',
-        help="Product Search question that must be answered before the "
-             "product lines are enabled.",
-    )
     product_lines_uoms_json = fields.Char(
         compute='_compute_product_lines_uoms_json',
         help="Active units of measure (JSON) rendered into the survey page "
              "for the product lines UoM dropdown. Not stored: it always "
              "follows the latest master data.",
+    )
+
+    product_lines_product_question_id = fields.Many2one(
+    'survey.question',
+    string='Product Question',
+    domain="[('survey_id', '=', survey_id), ('is_product_search', '=', True)]",
+    help="Product question that this product lines question refers to.",
     )
 
     @api.constrains(
@@ -74,23 +74,6 @@ class SurveyQuestion(models.Model):
                 raise ValidationError(_(
                     "A question can use only one dynamic type "
                     "(Staff Sales, Customer, Product or Product Lines)."
-                ))
-
-    @api.constrains('is_product_lines', 'product_lines_product_question_id')
-    def _check_product_lines_config(self):
-        for question in self:
-            if not question.is_product_lines:
-                continue
-            product_question = question.product_lines_product_question_id
-            if not product_question:
-                raise ValidationError(_(
-                    "Product Lines requires the Product question (FR-005)."
-                ))
-            if (product_question.survey_id != question.survey_id
-                    or not product_question.is_product_search):
-                raise ValidationError(_(
-                    "The Product question must be a Product Search question "
-                    "of the same survey."
                 ))
 
     @api.depends('is_product_lines')

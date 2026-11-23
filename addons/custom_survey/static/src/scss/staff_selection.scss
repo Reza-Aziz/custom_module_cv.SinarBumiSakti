@@ -1,76 +1,71 @@
 .o_dsr_staff_sales_trigger {
-    cursor: pointer;
-    caret-color: transparent;
-    text-overflow: ellipsis;
+  cursor: pointer;
+  caret-color: transparent;
+  text-overflow: ellipsis;
 }
 
 // Room for the "×" button, placed left of the select arrow.
 .o_dsr_staff_sales_clearable {
-    padding-right: 4rem;
+  padding-right: 4rem;
 }
 
 // Absolutely positioned over the input only (not the dropdown panel); its
 // height is set from JS to match the input. `d-none` hides it when empty.
 .o_dsr_staff_sales_clear {
-    position: absolute;
-    top: 0;
-    right: 2.25rem;
-    display: flex;
-    align-items: center;
-    padding: 0 0.5rem;
-    border: 0;
-    background: transparent;
-    color: var(--bs-secondary-color);
-    font-size: 1.5rem;
-    line-height: 1;
-    cursor: pointer;
+  position: absolute;
+  top: 0;
+  right: 2.25rem;
+  display: flex;
+  align-items: center;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--bs-secondary-color);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
 
-    &:hover,
-    &:focus-visible {
-        color: var(--bs-body-color);
-    }
+  &:hover,
+  &:focus-visible {
+    color: var(--bs-body-color);
+  }
 }
 
 // The panel stays in the normal document flow (no absolute positioning, no
 // z-index): parent containers grow with it, so ancestors with
 // `overflow-hidden` (e.g. .o_survey_section) cannot clip it.
 .o_dsr_staff_sales_panel {
-    position: static;
-    margin-top: 0.25rem;
-    margin-bottom: 0.5rem;
+  position: static;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
 
-    .o_dsr_staff_sales_results {
-        margin-bottom: 0;
+  .o_dsr_staff_sales_results {
+    margin-bottom: 0;
+  }
+
+  .o_dsr_staff_sales_option {
+    color: inherit;
+    text-decoration: none;
+    padding: 0.65rem 0.85rem;
+
+    &:hover,
+    &:focus,
+    &.active {
+      background: var(--bs-tertiary-bg);
+      text-decoration: none;
     }
-
-    .o_dsr_staff_sales_option {
-        color: inherit;
-        text-decoration: none;
-        padding: 0.65rem 0.85rem;
-
-        &:hover,
-        &:focus,
-        &.active {
-            background: var(--bs-tertiary-bg);
-            text-decoration: none;
-        }
-    }
+  }
 }
 
-// Product lines: disabled until the Product question has a value.
-.o_dsr_lines_disabled .o_dsr_lines_content {
-    opacity: 0.5;
-}
-
-// Quantity : UoM = 3 : 2
+// Product lines: Quantity : UoM = 3 : 2
 .o_dsr_line_amounts {
-    .o_dsr_line_qty {
-        flex: 3 1 0;
-        min-width: 0;
-    }
+  .o_dsr_line_qty {
+    flex: 3 1 0;
+    min-width: 0;
+  }
 
-    .o_dsr_line_uom {
-        flex: 2 1 0;
-        min-width: 0;
-    }
+  .o_dsr_line_uom {
+    flex: 2 1 0;
+    min-width: 0;
+  }
 }

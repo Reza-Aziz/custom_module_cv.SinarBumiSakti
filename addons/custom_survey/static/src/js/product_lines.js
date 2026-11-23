@@ -19,17 +19,17 @@ function parseList(text) {
  * The question input stays the submitted field (same name and
  * data-question-type) but is hidden: its value is a JSON list
  * [{ product_id, quantity, uom_id, more, product, uom }] rebuilt from the rows
- * whenever something changes, and empty while the section is disabled. The
- * backend (survey.question._validate_product_lines_answer) validates every
- * line again. Rows, radios and selects have no `data-question-type`, so the
- * core Survey never treats them as answers.
+ * whenever something changes. The backend
+ * (survey.question._validate_product_lines_answer) validates every line
+ * again. Rows, radios and selects have no `data-question-type`, so the core
+ * Survey never treats them as answers.
  *
- * Rows form a chain. Only the LAST row's radio group is active:
+ * The first row is created when the page loads (or restored). Rows form a
+ * chain and only the LAST row's radio group is active:
  * - "yes"    appends a new row below and locks this row on "yes";
  * - "remove" deletes this (last) row; the previous row is unlocked and its
  *            answer reset; unavailable on the first row;
  * - "no"     closes the chain (required to submit; enforced by the backend).
- * The section is enabled only while the Product question (FR-005) has a value.
  *
  * Each row's product field is a plain <input data-dsr-search-type="product">
  * brought to life with the existing DynamicSearchDropdown through the
@@ -41,47 +41,27 @@ export class ProductLines extends Interaction {
     setup() {
         const formEl = this.el.closest("form.o_survey-fill-form");
         this.answerToken = formEl?.dataset.answerToken || "";
-        this.productEl = (formEl || document).querySelector(
-            `input[name="${this.el.dataset.dsrProductQuestion}"]`
-        );
         this.uoms = parseList(this.el.dataset.dsrUoms);
         this.storageKey = `dsr_lines:${this.answerToken}:${this.el.name}`;
         this.nextUid = 1;
-        this.enabled = false;
-
-        this.rootEl = document.createElement("div");
-        this.rootEl.className = "o_dsr_lines mt-2";
-
-        this.messageEl = document.createElement("div");
-        this.messageEl.className = "o_dsr_lines_message alert alert-secondary py-2 small";
-
-        this.contentEl = document.createElement("div");
-        this.contentEl.className = "o_dsr_lines_content";
 
         this.bodyEl = document.createElement("div");
-        this.bodyEl.className = "o_dsr_lines_body";
-
-        this.contentEl.appendChild(this.bodyEl);
-        this.rootEl.append(this.messageEl, this.contentEl);
+        this.bodyEl.className = "o_dsr_lines mt-2";
     }
 
     start() {
         this.el.type = "hidden";
-        this.insert(this.rootEl, this.el.parentElement);
+        this.insert(this.bodyEl, this.el.parentElement);
 
         this.addListener(this.bodyEl, "change", (ev) => this.onBodyChange(ev));
         this.addListener(this.bodyEl, "input", (ev) => this.onBodyInput(ev));
         this.addListener(this.bodyEl, "dsr-selection-change", (ev) => this.onLineSelection(ev));
-        if (this.productEl) {
-            this.addListener(this.productEl, "dsr-selection-change", () => this.onProductChange());
-        }
 
         this.restoreRows();
-        this.updateEnabled();
-        if (this.enabled && !this.rowEls.length) {
+        if (!this.rowEls.length) {
             this.addRow();
-            this.refresh();
         }
+        this.refresh();
     }
 
     destroy() {
@@ -92,34 +72,6 @@ export class ProductLines extends Interaction {
 
     get rowEls() {
         return Array.from(this.bodyEl.children);
-    }
-
-    // Enable / disable
-    // -------------------------------------------------------------------------
-
-    updateEnabled() {
-        let message = "";
-        if (!this.productEl) {
-            message = _t(
-                "Konfigurasi tidak lengkap: pertanyaan Produk harus berada di halaman yang sama."
-            );
-        } else if (!this.productEl.value) {
-            message = _t("Pilih produk pada pertanyaan Produk terlebih dahulu.");
-        }
-        this.enabled = !message;
-        this.messageEl.textContent = message;
-        this.messageEl.classList.toggle("d-none", this.enabled);
-        this.rootEl.classList.toggle("o_dsr_lines_disabled", !this.enabled);
-        this.contentEl.toggleAttribute("inert", !this.enabled);
-        this.syncValue();
-    }
-
-    onProductChange() {
-        this.updateEnabled();
-        if (this.enabled && !this.rowEls.length) {
-            this.addRow();
-            this.refresh();
-        }
     }
 
     // Rows
@@ -241,7 +193,6 @@ export class ProductLines extends Interaction {
                 this.addRow(line);
             }
         }
-        this.refresh();
     }
 
     refresh() {
@@ -342,10 +293,11 @@ export class ProductLines extends Interaction {
 
     syncValue() {
         const lines = this.collectLines();
-        if (lines.length) {
-            this.saveBackup(JSON.stringify(lines));
+        const text = lines.length ? JSON.stringify(lines) : "";
+        if (text) {
+            this.saveBackup(text);
         }
-        this.el.value = this.enabled && lines.length ? JSON.stringify(lines) : "";
+        this.el.value = text;
     }
 
     saveBackup(text) {

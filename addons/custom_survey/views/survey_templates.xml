@@ -7,7 +7,6 @@
             <attribute name="t-att-data-dsr-search-type">'staff' if question.is_staff_sales_search else ('customer' if question.is_customer_search else ('product' if question.is_product_search else None))</attribute>
             <attribute name="t-att-autocomplete">'off' if (question.is_staff_sales_search or question.is_customer_search or question.is_product_search) else None</attribute>
             <attribute name="t-att-data-dsr-product-lines">'1' if question.is_product_lines else None</attribute>
-            <attribute name="t-att-data-dsr-product-question">question.product_lines_product_question_id.id or None</attribute>
             <attribute name="t-att-data-dsr-uoms">question.product_lines_uoms_json or None</attribute>
         </xpath>
     </template>
