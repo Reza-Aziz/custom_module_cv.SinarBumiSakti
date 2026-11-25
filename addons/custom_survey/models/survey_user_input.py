@@ -11,3 +11,13 @@ class SurveyUserInput(models.Model):
         ondelete='restrict',
         copy=False,
     )
+    dsr_result_status = fields.Selection(
+        [('success', 'Success'), ('failed', 'Failed')],
+        string='Result Status',
+        copy=False,
+    )
+    dsr_quotation_name = fields.Char(string='Quotation Number', copy=False)
+    dsr_staff_name = fields.Char(string='Staff Sales Name', copy=False)
+    dsr_customer_name = fields.Char(string='Customer Name', copy=False)
+    dsr_error_code = fields.Char(string='Error Code', copy=False)
+    dsr_result_message = fields.Char(string='Result Message', copy=False)

@@ -10,4 +10,28 @@
             <attribute name="t-att-data-dsr-uoms">question.product_lines_uoms_json or None</attribute>
         </xpath>
     </template>
+
+    <template id="survey_fill_form_done_result"
+              inherit_id="survey.survey_fill_form_done"
+              name="Survey: result of the quotation request">
+        <xpath expr="//div[hasclass('o_survey_description')]" position="before">
+            <div t-if="answer.dsr_result_status" class="o_dsr_result mb-3">
+                <t t-if="answer.dsr_result_status == 'success'">
+                    <div class="alert alert-success" role="alert">
+                        <p class="fw-bold mb-1"><t t-out="answer.dsr_result_message or 'Quotation berhasil dibuat.'"/></p>
+                        <p class="mb-1">Nomor Quotation: <strong t-out="answer.dsr_quotation_name"/></p>
+                        <p class="mb-1">Customer: <t t-out="answer.dsr_customer_name"/></p>
+                        <p class="mb-0">Staff Sales: <t t-out="answer.dsr_staff_name"/></p>
+                    </div>
+                </t>
+                <t t-else="">
+                    <div class="alert alert-danger" role="alert">
+                        <p class="fw-bold mb-1">Quotation gagal dibuat.</p>
+                        <p class="mb-1">Kode: <t t-out="answer.dsr_error_code"/></p>
+                        <p class="mb-0" t-out="answer.dsr_result_message"/>
+                    </div>
+                </t>
+            </div>
+        </xpath>
+    </template>
 </odoo>
