@@ -11,6 +11,22 @@ ID_ANSWER_RE = re.compile(r'^(?P<name>.+) \(ID: (?P<id>\d+)\)$')
 SEARCH_MAX_TOKENS = 5
 PRODUCT_LINES_MAX = 50
 
+DYNAMIC_FLAG_FIELDS = (
+    'is_staff_sales_search',
+    'is_customer_search',
+    'is_product_search',
+    'is_product_lines',
+)
+
+# Title convention (normalized: stripped, lower case) -> flag set automatically
+# on a Short Text question. It is only a default: the flag stays editable on
+# the question form.
+DYNAMIC_TITLE_FLAGS = {
+    'nama staf sales': 'is_staff_sales_search',
+    'customer': 'is_customer_search',
+    'daftar produk': 'is_product_lines',
+}
+
 
 class SurveyQuestion(models.Model):
     _inherit = 'survey.question'
@@ -88,6 +104,40 @@ class SurveyQuestion(models.Model):
             )
         for question in self:
             question.product_lines_uoms_json = options if question in flagged else False
+
+        # Default flags (plug and play)
+    # -------------------------------------------------------------------------
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        questions = super().create(vals_list)
+        questions._dsr_apply_default_flags()
+        return questions
+
+    def _dsr_get_default_flag(self):
+        """Flag a Short Text question should get from its title, if any."""
+        self.ensure_one()
+        if self.is_page or self.question_type != 'char_box':
+            return False
+        if any(self[name] for name in DYNAMIC_FLAG_FIELDS):
+            return False
+        return DYNAMIC_TITLE_FLAGS.get((self.title or '').strip().lower(), False)
+
+    def _dsr_apply_default_flags(self):
+        """Set the flags following the title convention.
+
+        Idempotent: it never clears a flag nor overrides a question that
+        already has one.
+        """
+        for question in self:
+            flag = question._dsr_get_default_flag()
+            if flag:
+                question.write({flag: True})
+
+    @api.model
+    def dsr_apply_default_flags_all(self):
+        """Entry point for the data file: runs on every install and upgrade."""
+        self.search([('question_type', '=', 'char_box')])._dsr_apply_default_flags()
 
     # Staff Sales
     # -------------------------------------------------------------------------

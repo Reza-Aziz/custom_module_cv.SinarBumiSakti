@@ -9,6 +9,7 @@
     'data': [
         'views/survey_question_views.xml',
         'views/survey_templates.xml',
+        'data/survey_setup.xml',
     ],
     'assets': {
         'survey.survey_assets': [

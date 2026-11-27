@@ -21,3 +21,28 @@ class SurveyUserInput(models.Model):
     dsr_customer_name = fields.Char(string='Customer Name', copy=False)
     dsr_error_code = fields.Char(string='Error Code', copy=False)
     dsr_result_message = fields.Char(string='Result Message', copy=False)
+
+    def _save_lines(self, question, answer, comment=None, overwrite_existing=True):
+        # The core saves every valid answer even when another question of the
+        # same page fails validation. Without "Users can go back", sending the
+        # corrected page again then raises "This answer cannot be overwritten".
+        # Allow the overwrite for non-scored surveys that use our dynamic
+        # questions; quizzes and other surveys keep the core guard.
+        if not overwrite_existing and self._dsr_allow_overwrite():
+            overwrite_existing = True
+        return super()._save_lines(
+            question, answer, comment, overwrite_existing=overwrite_existing
+        )
+
+    def _dsr_allow_overwrite(self):
+        self.ensure_one()
+        survey = self.survey_id
+        if survey.scoring_type != 'no_scoring':
+            return False
+        return any(
+            question.is_staff_sales_search
+            or question.is_customer_search
+            or question.is_product_search
+            or question.is_product_lines
+            for question in survey.question_ids
+        )
